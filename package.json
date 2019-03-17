@@ -1,0 +1,19 @@
+{
+  "name": "mini-html-parse",
+  "version": "1.0.0",
+  "description": "A simple html parser for play... It's just a toy.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wenqi73/mini-html-parser.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/wenqi73/mini-html-parser/issues"
+  },
+  "homepage": "https://github.com/wenqi73/mini-html-parser#readme"
+}

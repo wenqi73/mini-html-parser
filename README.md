@@ -1,3 +1,4 @@
-# toy-html-parser
+# mini-html-parser
 A simple html parser for play...
-It's just a toy.
+- winter
+- https://github.com/aimergenge/toy-html-parser
