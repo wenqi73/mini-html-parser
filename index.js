@@ -1,7 +1,12 @@
-const EOF = void 0
+const SLASH      = '/';
+const OPEN_TAG   = '<';
+const CLOSED_TAG = '>';
+const LETTER     = /[a-zA-Z]/;
+const SPACE_OR_NEW_LINE   = /[\t \f\n]/;
+
 // lexer
 class HTMLLexicalParser {
-  state = this.data
+  state = this.initState
   token = null
   attribute = null
   characterReference = ''
@@ -20,49 +25,39 @@ class HTMLLexicalParser {
   }
 
   reset() {
-    this.state = this.data
+    this.state = this.initState
   }
 
-  data (c) {
+  initState (c) {
     switch (c) {
       case '&':
-        return this.characterReferenceInData
-      case '<':
+        return this.toCharacterEntity
+      case OPEN_TAG:
         return this.tagOpen
-      // perhaps will not encounter in javascript?
-      // case '\0':
-      //   error()
-      //   emitToken(c)
-      //   return data
-      //  can be handle by default case
-      // case EOF:
-      //   emitToken(EOF)
-      //   return data
-
       default:
         this.emitToken(c)
-        return this.data
+        return this.initState
     }
   }
 
   // only handle right character reference
-  characterReferenceInData (c) {
+  toCharacterEntity (c) {
     if (c === ';') {
       this.characterReference += c
       this.emitToken(this.characterReference)
       this.characterReference = ''
-      return this.data
+      return this.initState
     } else {
       this.characterReference += c
-      return this.characterReferenceInData
+      return this.toCharacterEntity
     }
   }
 
   tagOpen(c) {
-    if (c === '/') {
+    if (c === SLASH) {
       return this.endTagOpen
     }
-    if (/[a-zA-Z]/.test(c)) {
+    if (LETTER.test(c)) {
       this.token = new StartTagToken()
       this.token.name = c.toLowerCase()
       return this.tagName
@@ -70,35 +65,34 @@ class HTMLLexicalParser {
     return this.error(c)
   }
 
-
-  tagName (c) {
-    if  (c === '/') {
+  tagName(c) {
+    if  (c === SLASH) {
       return this.selfClosingTag
     }
     // tab space next-page next-line
-    if  (/[\t \f\n]/.test(c)) {
+    if  (SPACE_OR_NEW_LINE.test(c)) {
       return this.beforeAttributeName
     }
-    if (c === '>') {
+    if (c === CLOSED_TAG) {
       this.emitToken(this.token)
-      return this.data
+      return this.initState
     }
-    if (/[a-zA-Z]/.test(c)) {
+    if (LETTER.test(c)) {
       this.token.name += c.toLowerCase()
       return this.tagName
     }
   }
 
-  beforeAttributeName (c) {
-    if (/[\t \f\n]/.test(c)) {
+  beforeAttributeName(c) {
+    if (SPACE_OR_NEW_LINE.test(c)) {
       return this.beforeAttributeName
     }
-    if (c === '/') {
+    if (c === SLASH) {
       return this.selfClosingTag
     }
-    if (c === '>') {
+    if (c === CLOSED_TAG) {
       this.emitToken(this.token)
-      return this.data
+      return this.initState
     }
     if (/["'<]/.test(c)) {
       return this.error(c)
@@ -110,29 +104,29 @@ class HTMLLexicalParser {
     return this.attributeName
   }
 
-  attributeName (c) {
-    if (c === '/') {
+  attributeName(c) {
+    if (c === SLASH) {
       this.token[this.attribute.name] = this.attribute.value
       return this.selfClosingTag
     }
     if (c === '=') {
       return this.beforeAttributeValue
     }
-    if (/[\t \f\n]/.test(c)) {
+    if (SPACE_OR_NEW_LINE.test(c)) {
       return this.beforeAttributeName
     }
     this.attribute.name += c.toLowerCase()
     return this.attributeName
   }
 
-  beforeAttributeValue (c) {
+  beforeAttributeValue(c) {
     if (c === '"') {
       return this.attributeValueDoubleQuoted
     }
     if (c === "'") {
       return this.attributeValueSingleQuoted
     }
-    if (/\t \f\n/.test(c)) {
+    if (SPACE_OR_NEW_LINE.test(c)) {
       return this.beforeAttributeValue
     }
     this.attribute.value += c
@@ -158,8 +152,8 @@ class HTMLLexicalParser {
   }
 
   attributeValueUnquoted (c) {
-    if (/[\t \f\n]/.test(c)) {
-      this.token[attribute.name] = this.attribute.value
+    if (SPACE_OR_NEW_LINE.test(c)) {
+      this.token[this.attribute.name] = this.attribute.value
       return this.beforeAttributeName
     }
     this.attribute.value += c
@@ -167,31 +161,32 @@ class HTMLLexicalParser {
   }
 
   selfClosingTag (c) {
-    if (c === '>') {
+    if (c === CLOSED_TAG) {
       this.emitToken(this.token)
       this.endToken = new EndTagToken()
       this.endToken.name = this.token.name
       this.emitToken(this.endToken)
-      return this.data
+      return this.initState
     }
   }
 
   endTagOpen (c) {
-    if (/[a-zA-Z]/.test(c)) {
+    if (LETTER.test(c)) {
       this.token = new EndTagToken()
       this.token.name = c.toLowerCase()
       return this.tagName
     }
-    if (c === '>') {
-      return error(c)
+    if (c === CLOSED_TAG) {
+      return this.error(c)
     }
   }
 
-  emitToken (token) {
-    this.syntaxer.receiveInput(token)
+  emitToken(token) {
+    this.syntaxer.receiveToken(token)
   }
 
-  error (c) {
+  error(c) {
+    // eslint-disable-next-line no-console
     console.log(`warn: unexpected char '${c}'`)
   }
 }
@@ -202,15 +197,16 @@ class EndTagToken {}
 
 class Attribute {}
 
-
 // syntaxer
 class HTMLDocument {
-  constructor () {
+  constructor() {
     this.isDocument = true
     this.childNodes = []
   }
 }
+
 class Node {}
+
 class Element extends Node {
   constructor (token) {
     super(token)
@@ -223,6 +219,7 @@ class Element extends Node {
     return `Element<${this.name}>`
   }
 }
+
 class Text extends Node {
   constructor (value) {
     super(value)
@@ -230,52 +227,65 @@ class Text extends Node {
   }
 }
 
-function HTMLSyntaticalParser () {
-  const stack = [new HTMLDocument]
+class HTMLSyntacticParser {
+  stack = [new HTMLDocument]
 
-  this.receiveInput = function (token) {
+  /**
+   * receive token passed by lexer
+   * @param {*} token 
+   */
+  receiveToken(token) {
+    console.log(token);
+    // string between start and end tag
+    // like <span>this is a span</span>, 'this is a span' is the value
     if (typeof token === 'string') {
-      if (getTop(stack) instanceof Text) {
-        getTop(stack).value += token
+      if (this.topStack instanceof Text) {
+        this.topStack.value += token
       } else {
+        // create new Text at start
         let t = new Text(token)
-        getTop(stack).childNodes.push(t)
-        stack.push(t)
+        this.topStack.childNodes.push(t)
+        this.stack.push(t)
       }
-    } else if (getTop(stack) instanceof Text) {
-      stack.pop()
+    } else if (this.topStack instanceof Text) {
+      // meet start tag or end tag
+      this.stack.pop()
     }
 
+    /**
+     * push start tag, pop same tag when it's end
+     */
     if (token instanceof StartTagToken) {
       let e = new Element(token)
-      getTop(stack).childNodes.push(e)
-      return stack.push(e)
+      this.topStack.childNodes.push(e)
+      return this.stack.push(e)
     }
     if (token instanceof EndTagToken) {
-      return stack.pop()
+      return this.stack.pop()
     }
   }
 
-  this.getOutput = () => stack[0]
-}
+  getOutput() {
+    return this.stack[0];
+  }
 
-function getTop (stack) {
-  return stack[stack.length - 1]
+  get topStack() {
+    return this.stack[this.stack.length - 1]
+  }
 }
-
 
 // Example
-const syntaxer = new HTMLSyntaticalParser()
+const syntaxer = new HTMLSyntacticParser()
 const lexer = new HTMLLexicalParser(syntaxer)
-
-const testHTML = `<html lang="en" >
+const testHTML = `
+  <html lang="en">
     <head>
       <title>cool</title>
     </head>
     <body>
       <img src="a" />
     </body>
-</html>`
+  </html>`
 
 for (let c of testHTML) {
   lexer.receiveInput(c)
